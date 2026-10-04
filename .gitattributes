@@ -1,0 +1,7 @@
+# keep line endings the same for everyone, whatever core.autocrlf says
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.blend binary
+*.zip binary
+*.img binary

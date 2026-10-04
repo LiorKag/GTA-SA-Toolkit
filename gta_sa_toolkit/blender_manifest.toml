@@ -1,0 +1,22 @@
+schema_version = "1.0.0"
+
+id = "gta_sa_toolkit"
+version = "1.0.0"
+name = "GTA SA Toolkit"
+tagline = "Import GTA SA maps, peds, vehicles, weapons, toys and IFP anims"
+maintainer = "Benji"
+type = "add-on"
+website = "https://github.com/LiorKag/GTA-SA-Toolkit"
+
+tags = ["Import-Export", "Animation", "3D View"]
+
+blender_version_min = "4.4.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = [
+  "2026 Benji",
+  "2019-2025 Parik and DragonFF contributors (material names, bone roll, collision surface table from Steve-M's col.ini)",
+]
+
+[permissions]
+files = "Read GTA game files; write IFP, Pawn and optional cache files"
