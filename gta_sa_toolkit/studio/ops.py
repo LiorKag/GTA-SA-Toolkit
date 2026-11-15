@@ -4,17 +4,12 @@ import os
 import bpy
 from bpy.props import StringProperty
 
-from . import corelink, lighting, render, vehicle
+from .. import lighttags
+from . import lighting, render, switches, vehicle
 from .props import PRESET_HOURS
 
 
-class _NeedsCore:
-    @classmethod
-    def poll(cls, context):
-        return corelink.api() is not None
-
-
-class GTASTUDIO_OT_time_preset(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_time_preset(bpy.types.Operator):
     bl_idname = "gtastudio.time_preset"
     bl_label = "Time of Day"
     bl_description = "Quick time: Day = 12:00, Dusk = 19:00, Night = 0:00"
@@ -83,7 +78,7 @@ def _timecyc_items(self, context):
     return _TC_ITEMS
 
 
-class GTASTUDIO_OT_timecyc_choose(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_timecyc_choose(bpy.types.Operator):
     bl_idname = "gtastudio.timecyc_choose"
     bl_label = "Timecyc"
     bl_description = ("Which timecyc drives the sky, sun and fog of this scene. A file for another game or "
@@ -102,7 +97,7 @@ class GTASTUDIO_OT_timecyc_choose(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_timecyc_add(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_timecyc_add(bpy.types.Operator):
     bl_idname = "gtastudio.timecyc_add"
     bl_label = "Add Timecyc File"
     bl_description = "Add a timecyc.dat to the list (e.g. a weather mod or an unmodified copy) and use it"
@@ -121,7 +116,7 @@ class GTASTUDIO_OT_timecyc_add(_NeedsCore, bpy.types.Operator):
         except (OSError, timecyc.TimecycError) as e:
             self.report({'ERROR'}, "%s: %s" % (os.path.basename(path) or "No file", e))
             return {'CANCELLED'}
-        pr = corelink.prefs()
+        pr = switches.prefs()
         if all(os.path.normcase(bpy.path.abspath(f.path)) != os.path.normcase(path) for f in pr.timecyc_files):
             pr.timecyc_files.add().path = path
             context.preferences.is_dirty = True
@@ -130,7 +125,7 @@ class GTASTUDIO_OT_timecyc_add(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_timecyc_remove(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_timecyc_remove(bpy.types.Operator):
     bl_idname = "gtastudio.timecyc_remove"
     bl_label = "Remove from List"
     bl_description = ("Take the chosen timecyc off the list (a Mod Folder file is only hidden; nothing is "
@@ -138,12 +133,12 @@ class GTASTUDIO_OT_timecyc_remove(_NeedsCore, bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return super().poll(context) and context.scene.gta_studio.timecyc_choice[:2] in ("F:", "M:")
+        return context.scene.gta_studio.timecyc_choice[:2] in ("F:", "M:")
 
     def execute(self, context):
         from . import timecycs
         p = context.scene.gta_studio
-        pr = corelink.prefs()
+        pr = switches.prefs()
         path = p.timecyc_choice[2:]
         if p.timecyc_choice.startswith("F:"):
             for i in range(len(pr.timecyc_files) - 1, -1, -1):
@@ -157,13 +152,13 @@ class GTASTUDIO_OT_timecyc_remove(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_find_lights(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_find_lights(bpy.types.Operator):
     bl_idname = "gtastudio.find_lights"
     bl_label = "Find Lights"
     bl_description = "Find and sort GTA lights (2DFX) already in the scene, e.g. from older imports"
 
     def execute(self, context):
-        n = corelink.api().tag_scene_lights()
+        n = lighttags.scan_scene_lights()
         lighting.apply(context.scene)
         c = lighting.refresh_counts(context.scene)
         found = ", ".join("%s %d" % (k.title(), v) for k, v in c.items() if v)
@@ -171,7 +166,7 @@ class GTASTUDIO_OT_find_lights(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_add_camera(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_add_camera(bpy.types.Operator):
     bl_idname = "gtastudio.add_camera"
     bl_label = "Add Camera"
     bl_description = ("A camera aimed at the selected model (or the 3D cursor), with the chosen lens. "
@@ -184,7 +179,7 @@ class GTASTUDIO_OT_add_camera(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_turntable(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_turntable(bpy.types.Operator):
     bl_idname = "gtastudio.turntable"
     bl_label = "Turntable"
     bl_description = "A camera that circles the selected vehicle or model once, looping, over the chosen number of frames"
@@ -192,7 +187,7 @@ class GTASTUDIO_OT_turntable(_NeedsCore, bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return corelink.api() is not None and context.active_object is not None
+        return context.active_object is not None
 
     def execute(self, context):
         ob = context.active_object
@@ -208,7 +203,7 @@ class GTASTUDIO_OT_turntable(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_frame_map_area(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_frame_map_area(bpy.types.Operator):
     bl_idname = "gtastudio.frame_map_area"
     bl_label = "Frame Map Area"
     bl_description = ("Camera and render settings (1920x1080, EEVEE) for the map import selected in the World tab. "
@@ -227,10 +222,10 @@ class GTASTUDIO_OT_frame_map_area(_NeedsCore, bpy.types.Operator):
 
 
 # ----------------------------------------------------------------------------- Vehicle tab
-class _OnVehicle(_NeedsCore):
+class _OnVehicle:
     @classmethod
     def poll(cls, context):
-        return corelink.api() is not None and vehicle.find_root(context.active_object) is not None
+        return vehicle.find_root(context.active_object) is not None
 
 
 def _vehicle_root(context):

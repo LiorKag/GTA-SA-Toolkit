@@ -308,6 +308,13 @@ def _base(name):
     return head if dot and tail.isdigit() else name
 
 
+def map_object_values(objects):
+    """[(object, (model, (x, y, z), (rx, ry, rz), (sx, sy, sz)))] for placed map objects
+    (map_object_root results), as SA-MP CreateObject values."""
+    roots = library_roots()
+    return [(ob, placed_values(ob, roots)) for ob in objects]
+
+
 def placed_values(ob, roots=None):
     """Exact reverse of a map/Pawn import for a placed map object (see map_object_root):
     (model, (x, y, z), (rx, ry, rz) SA-MP degrees, (sx, sy, sz)). roots: library_roots(), pass it

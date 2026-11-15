@@ -302,7 +302,7 @@ def load_txd(game, txd, pack):
             img = bpy.data.images.load(path, check_existing=False)
             img.name = iname
             img["gta_tk_tex"] = True
-            if pack == 'NOW':
+            if pack:                        # the file then never depends on the cache
                 img.pack()
         out[low] = [img]
     return out

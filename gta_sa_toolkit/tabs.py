@@ -1,5 +1,5 @@
 # GTA SA Toolkit - registry of the tabs shown in the "GTA SA Toolkit" sidebar panel.
-# Core registers World / Peds (id CHARS) / Objects (id ITEMS) / Library; GTA SA Studio adds its own through api.py.
+# Core registers World / Peds (id CHARS) / Objects (id ITEMS) / Library; GTA SA Studio (studio/) adds its own.
 # The tab switch (Scene.gta_tk_x.ui_tab) is an enum whose items come from this registry. Each tab has
 # a fixed enum number so the selected tab saved in a .blend survives add-ons being enabled/disabled.
 import os

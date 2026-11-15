@@ -1,41 +1,22 @@
-# GTA SA Toolkit - events other add-ons (GTA SA Studio) can listen to.
-#   import_done(objects)  once per finished import (map, model, vehicle, weapon, toy, SA-MP code)
-#   import_removed()      after "Remove Imported Map" deleted an import
-#   game_scanned()        after "Scan Game Files"
+# GTA SA Toolkit - what happens after an import.
+#   import_done(objects)  once per finished import (map, model, vehicle, weapon, toy, SA-MP code):
+#                         Studio sets up the new lights and vehicles (studio.on_import_done)
+#   import_removed()      after "Remove Imported Map" deleted an import (Studio recounts lights)
 # The importers call import_done() for what they create. An operator that runs several importers
-# wraps them in `with events.import_batch():` so listeners hear about the whole job once.
+# wraps them in `with events.import_batch():` so the whole job is handled once.
 import functools
 import traceback
 
-_LISTENERS = {"import_done": [], "import_removed": [], "game_scanned": []}
 _BATCH = {"depth": 0, "objects": [], "fired": False}
 
 
-def add(event, fn):
-    lst = _LISTENERS[event]
-    if fn not in lst:
-        lst.append(fn)
-    return fn
-
-
-def remove(fn):
-    for lst in _LISTENERS.values():
-        while fn in lst:
-            lst.remove(fn)
-
-
-def clear():
-    for lst in _LISTENERS.values():
-        lst.clear()
-
-
-def _call(event, *args):
-    for fn in list(_LISTENERS[event]):
-        try:
-            fn(*args)
-        except Exception:                 # noqa - a listener must never break an import
-            print("[GTA SA Toolkit] %s listener %r failed:" % (event, fn))
-            traceback.print_exc()
+def _call(fn_name, *args):
+    from . import studio
+    try:
+        getattr(studio, fn_name)(*args)
+    except Exception:                     # noqa - setting up lights / vehicles must never break an import
+        print("[GTA SA Toolkit] %s failed:" % fn_name)
+        traceback.print_exc()
 
 
 def _unique_live(objects):
@@ -52,7 +33,7 @@ def _unique_live(objects):
 
 
 def _finish_import(objects):
-    _call("import_done", _unique_live(objects))
+    _call("on_import_done", _unique_live(objects))
 
 
 def import_done(objects):
@@ -93,8 +74,4 @@ def batched(execute):
 
 
 def import_removed():
-    _call("import_removed")
-
-
-def game_scanned():
-    _call("game_scanned")
+    _call("on_import_removed")

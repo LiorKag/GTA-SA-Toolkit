@@ -74,33 +74,28 @@ class GTATK_TimecycFile(bpy.types.PropertyGroup):
 
 
 def _studio_switch(self, context):
-    from . import studiolink
-    studiolink.switch_changed()
-
-
-def _studio_areas(self, context):
-    from . import studiolink
-    studiolink.areas_changed()
+    from . import studio
+    studio.show_tabs()
 
 
 class GTATK_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
-    # GTA SA Studio (built in; studiolink.py): switches and its settings (kept when it's off)
+    # GTA SA Studio (studio/): switches (studio/switches.py) and its settings
     studio_on: BoolProperty(name="GTA SA Studio", default=True, update=_studio_switch,
-                            description="Scene, lighting, vehicle, toy, path and animation tools. Off: none of "
-                                        "them are loaded")
-    studio_scene: BoolProperty(name="Scene Tab", default=True, update=_studio_areas,
+                            description="Scene, lighting, vehicle, toy, path and animation tools. Off: their tabs "
+                                        "and sections are hidden and imports don't set up lights or vehicles")
+    studio_scene: BoolProperty(name="Scene Tab", default=True, update=_studio_switch,
                                description="Time & weather, sky, map lights, camera & render")
-    studio_animate: BoolProperty(name="Animate Tab", default=True, update=_studio_areas,
+    studio_animate: BoolProperty(name="Animate Tab", default=True, update=_studio_switch,
                                  description="Combine IFP clips into one animation, bake and export it")
-    studio_vehicle: BoolProperty(name="Vehicle Sections", default=True, update=_studio_areas,
+    studio_vehicle: BoolProperty(name="Vehicle Sections", default=True, update=_studio_switch,
                                  description="Colours, lights, paintjobs, doors and upgrades in the Vehicles tab")
-    studio_toys: BoolProperty(name="Toy Editor", default=True, update=_studio_areas,
+    studio_toys: BoolProperty(name="Toy Editor", default=True, update=_studio_switch,
                               description="Edit attached SA-MP toys (Peds tab)")
-    studio_pawn: BoolProperty(name="Pawn Export", default=True, update=_studio_areas,
+    studio_pawn: BoolProperty(name="Pawn Export", default=True, update=_studio_switch,
                               description="Export map objects as SA-MP Pawn code (World tab)")
-    studio_paths: BoolProperty(name="Traffic & Ped Paths", default=True, update=_studio_areas,
+    studio_paths: BoolProperty(name="Traffic & Ped Paths", default=True, update=_studio_switch,
                                description="Draw the game's paths, make a vehicle or ped follow them (World tab)")
     timecyc_files: CollectionProperty(type=GTATK_TimecycFile)          # added with Add File... (studio/timecycs.py)
     timecyc_hidden: StringProperty(options={'HIDDEN'})                  # Mod Folder finds removed from the list
@@ -108,8 +103,6 @@ class GTATK_Preferences(bpy.types.AddonPreferences):
         name="timecyc.dat", subtype='FILE_PATH',
         description="Optional: a timecyc.dat to use instead of the game folder's data/timecyc.dat "
                     "(e.g. an unmodified copy when the game has a weather mod)")
-    studio_prefs_copied: BoolProperty(options={'HIDDEN'},
-                                      description="The separate GTA SA Studio's settings were copied (studiolink.py)")
 
     favorites: CollectionProperty(type=GTATK_LibItem)
     recents: CollectionProperty(type=GTATK_LibItem)
@@ -143,16 +136,18 @@ class GTATK_Preferences(bpy.types.AddonPreferences):
         draw_mod_folders(l, self)
         l.separator()
         draw_studio_prefs(l, self)
+        l.separator()
+        r = l.row()
+        r.label(text="A .blend made with a pre-release version of this add-on:", icon='FILE_BLEND')
+        r.operator("gtatk.update_old_file", icon='FILE_REFRESH')
 
 
 def draw_studio_prefs(layout, pr):
-    from . import studiolink
-    from .studio.corelink import AREAS
-    studiolink.draw_old_message(layout)
+    from .studio.switches import AREAS
     box = layout.box()
     box.prop(pr, "studio_on")
     col = box.column(align=True)
-    col.active = pr.studio_on and not studiolink.old()
+    col.active = pr.studio_on
     for area, _label, _desc in AREAS:
         col.prop(pr, "studio_" + area)
     col.separator()

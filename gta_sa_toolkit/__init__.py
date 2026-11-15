@@ -5,13 +5,13 @@
 
 if "bpy" in locals():
     import importlib
-    from . import formats, events, tabs, api, cache, thumbs, anim, mapimport, lighttags, vehicles, weapons, samp, paths, radar, overlay, areapick, preview, library, ifplist, peds, mods, migrate, rwbuild, studiolink, texfix, ui, ui_extra, ui_layout
+    from . import formats, events, tabs, cache, thumbs, anim, mapimport, lighttags, vehicles, weapons, samp, paths, radar, overlay, areapick, preview, library, ifplist, peds, mods, migrate, rwbuild, texfix, ui, ui_extra, ui_layout, studio
     from .formats import ifp, img, mapdata, dxt, nodes, gxt, dffprobe, rw, dff, txd, col, colmats
-    for m in (ifp, img, gxt, dffprobe, mapdata, dxt, rw, dff, txd, col, colmats, nodes, events, tabs, cache, thumbs, anim, mapimport, lighttags, vehicles, weapons, samp, paths, radar, overlay, areapick, preview, library, ifplist, peds, mods, migrate, rwbuild, studiolink, texfix, ui, ui_extra, ui_layout, api):
+    for m in (ifp, img, gxt, dffprobe, mapdata, dxt, rw, dff, txd, col, colmats, nodes, events, tabs, cache, thumbs, anim, mapimport, lighttags, vehicles, weapons, samp, paths, radar, overlay, areapick, preview, library, ifplist, peds, mods, migrate, rwbuild, texfix, ui, ui_extra, ui_layout, studio):
         importlib.reload(m)
 
 import bpy  # noqa: E402
-from . import api, areapick, library, migrate, mods, preview, studiolink, texfix, thumbs, ui, ui_extra, ui_layout  # noqa: E402
+from . import areapick, library, migrate, mods, preview, studio, texfix, thumbs, ui, ui_extra, ui_layout  # noqa: E402
 
 
 def register():
@@ -25,15 +25,11 @@ def register():
     ui_layout.register()
     migrate.register()
     texfix.register()
-    studiolink.register()
-    studiolink.start()                         # the built-in GTA SA Studio (unless switched off / old one on)
-    api._notify("gtatk_core_ready", api)       # e.g. an old separate GTA SA Studio re-adds its tabs
+    studio.register()
 
 
 def unregister():
-    api._notify("gtatk_core_gone")
-    studiolink.stop()
-    studiolink.unregister()
+    studio.unregister()
     texfix.unregister()
     migrate.unregister()
     ui_layout.unregister()

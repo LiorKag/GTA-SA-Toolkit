@@ -229,7 +229,7 @@ class GTATK_Props(bpy.types.PropertyGroup):
                                     description="Also import objects placed in interiors")
     load_textures: BoolProperty(name="Textures", default=True)
     pack_images: BoolProperty(name="Pack Images", default=True,
-                              description="Embed the imported GTA textures in the .blend when you save "
+                              description="Embed the imported GTA textures in the .blend as they are imported "
                                           "(otherwise they are lost on reload)")
     load_collisions: BoolProperty(name="Collisions", default=False)
     use_mat_split: BoolProperty(name="Material Split", default=False)
@@ -355,7 +355,6 @@ class GTATK_OT_scan_game(bpy.types.Operator):
         except Exception as e:           # noqa
             print("[GTA SA Toolkit] animation index:", e)
         self.report({'INFO'}, msg)
-        events.game_scanned()
         return {'FINISHED'}
 
 
@@ -614,6 +613,29 @@ def current_source(p):
     return ""
 
 
+def selected_anim(scene=None):
+    """(source, animation name) highlighted in the shared IFP browser, or None."""
+    p = (scene or bpy.context.scene).gta_tk
+    src = current_source(p)
+    if not src or not p.anims:
+        return None
+    return src, p.anims[min(p.anims_index, len(p.anims) - 1)].name
+
+
+def write_ifp(anims, path, format='AUTO', mode='NEW', base=None, ifp_name="custom"):
+    """Write one animation or a list (anim.export_ifp) and forget the cached copy of that file.
+    Returns (path, format_used)."""
+    if not isinstance(anims, (list, tuple)):
+        anims = [anims]
+    path = bpy.path.abspath(path)
+    res = anim_ops.export_ifp(list(anims), path, fmt=format, mode=mode,
+                              base=bpy.path.abspath(base) if base else None, ifp_name=ifp_name)
+    for n in res["notes"]:
+        print("[GTA SA Toolkit]", n)
+    _IFP_CACHE.pop(os.path.normcase(os.path.abspath(path)), None)
+    return res["path"], res["format"]
+
+
 def choose_source(context, src):
     """Load an IFP source into the shared animation list. Returns the IfpFile."""
     from . import library
@@ -673,7 +695,7 @@ class GTATK_OT_ifp_choose(bpy.types.Operator):
 
 def draw_ifp_browser(layout, context, rows=8):
     """The IFP dropdown, search and animation list: the Peds tab's IFP Animation section, and Studio's
-    Add Clip through api.draw_ifp_browser. Stored values only."""
+    Add Clip. Stored values only."""
     from . import library
     p = context.scene.gta_tk
     src = current_source(p)
@@ -1235,27 +1257,14 @@ classes = (
 )
 
 
-@bpy.app.handlers.persistent
-def _pack_on_save(*_):
-    try:
-        if any(getattr(s, "gta_tk", None) and s.gta_tk.pack_images for s in bpy.data.scenes):
-            mapimport.pack_pending_images()
-    except Exception as e:           # noqa
-        print("[GTA SA Toolkit] pack on save failed:", e)
-
-
 def register():
     for c in classes:
         bpy.utils.register_class(c)
-    if _pack_on_save not in bpy.app.handlers.save_pre:
-        bpy.app.handlers.save_pre.append(_pack_on_save)
     bpy.types.Scene.gta_tk = PointerProperty(type=GTATK_Props)
     bpy.types.TOPBAR_MT_file_import.append(menu_import_ifp)
 
 
 def unregister():
-    if _pack_on_save in bpy.app.handlers.save_pre:
-        bpy.app.handlers.save_pre.remove(_pack_on_save)
     bpy.types.TOPBAR_MT_file_import.remove(menu_import_ifp)
     del bpy.types.Scene.gta_tk
     for c in reversed(classes):

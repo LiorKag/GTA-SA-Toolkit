@@ -2,7 +2,7 @@
 #
 # A ped (armature) holds a list of clips (Object.gta_anim_studio.clips) in playback order. The rows
 # are the source of truth; sync(arm) turns them into Blender NLA data:
-#   - every clip's IFP animation is put on the ped once through core (api.ifp_apply) as a "source"
+#   - every clip's IFP animation is put on the ped once with anim.apply_ifp as a "source"
 #     action, shared by rows using the same clip;
 #   - every row gets its own action: the trimmed part of the source x repeats, starting at frame 1,
 #     with its root bone moved and turned so it carries on from the clip before it (root matching);
@@ -26,14 +26,11 @@ from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProp
                        PointerProperty, StringProperty)
 from mathutils import Matrix, Quaternion, Vector
 
-from . import corelink
+from .. import anim as core_anim
+from .. import library, ui
 from .compat import ensure_channelbag, new_fcurve
 
 _BUSY = {"on": False}          # set while sync writes computed values back (no nested syncs)
-
-
-def _api():
-    return corelink.api()
 
 
 def fps_of(scene):
@@ -153,7 +150,7 @@ class GTASTUDIO_AnimName(bpy.types.PropertyGroup):
 
 class GTASTUDIO_AnimBrowser(bpy.types.PropertyGroup):
     # older versions had their own IFP browser; Add Clip now uses core's shared one
-    # (api.draw_ifp_browser). Kept registered so older files open without warnings.
+    # (ui.draw_ifp_browser). Kept registered so older files open without warnings.
     ifp_path: StringProperty(name="IFP", subtype='FILE_PATH')
     names: CollectionProperty(type=GTASTUDIO_AnimName)
     index: IntProperty(name="Animation")
@@ -193,14 +190,13 @@ def make_source(arm, ifp_path, anim_name, fps):
         if (act.get("gta_combo_src") == "%s|%s|%g" % (_src_key(ifp_path), anim_name, fps)
                 and act.get("gta_combo_arm") == arm.name):
             return act, []
-    a = _api()
-    anim = a.ifp_file(ifp_path).find(anim_name)
+    anim = library.load_anim_file(bpy.context, ifp_path).find(anim_name)
     if anim is None:
         raise ValueError("%s is not in %s" % (anim_name, ifp_path))
     ad = arm.animation_data or arm.animation_data_create()
     keep, keep_slot = ad.action, (ad.action_slot if ad.action is not None else None)
-    act, missing = a.ifp_apply(arm, anim, start_frame=1.0, fps=fps, root_mode='BONE', new_action=True,
-                               action_name="GTA clip " + anim_name, clear_pose=False)
+    act, missing = core_anim.apply_ifp(arm, anim, start_frame=1.0, fps=fps, root_mode='BONE', new_action=True,
+                                       action_name="GTA clip " + anim_name, clear_pose=False)
     ad.action = keep
     if keep is not None and keep_slot is not None:
         try:
@@ -716,18 +712,17 @@ def unbake(arm):
 
 
 def export(arm, scene, path, mode='NEW'):
-    """Bake if needed, then write through core's IFP export. Returns (path, format used, notes)."""
-    a = _api()
+    """Bake if needed, then write it with the add-on's IFP export. Returns (path, format used, notes)."""
     st = arm.gta_anim_studio
     if not st.is_baked or st.baked is None:
         bake(arm, scene)
     f0, f1 = combo_range(arm)
     name = (st.export_name or ped_name(arm))[:23]
-    anim = a.ifp_bake(arm, action=st.baked, name=name, fps=fps_of(scene), frame_start=f0, frame_end=f1)
+    anim = core_anim.bake_ifp(arm, action=st.baked, name=name, fps=fps_of(scene), frame_start=f0, frame_end=f1)
     if mode == 'NEW':
-        out, fmt = a.ifp_export(anim, path, format=st.export_format, mode='NEW', ifp_name=name)
+        out, fmt = ui.write_ifp(anim, path, format=st.export_format, mode='NEW', ifp_name=name)
     else:
-        out, fmt = a.ifp_export(anim, path, mode='REPLACE', base=path)
+        out, fmt = ui.write_ifp(anim, path, mode='REPLACE', base=path)
     notes = []
     if fmt == 'ANPK' and (mode != 'NEW' or st.export_format != 'ANPK'):
         notes.append("The ped travels more than 32 m: saved as ANPK (San Andreas reads it too)")

@@ -1,6 +1,6 @@
 # GTA SA Studio - the Edit tab: toy editor (SA-MP attached objects), Pawn export of map objects and
 # traffic / ped paths (paths.py).
-# All SA-MP maths are core's (api.toy_values / set_toy_values / map_object_values ...), the exact
+# All SA-MP maths are in samp.py (toy_values / set_toy_values / map_object_values ...), the exact
 # reverse of its toy attach and SA-MP map import; this module is the panel, clipboard and file side.
 import os
 
@@ -8,21 +8,15 @@ import bpy
 from bpy.props import EnumProperty, FloatVectorProperty, IntProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from . import corelink
-
-
-def _api():
-    return corelink.api()
+from .. import samp, tabs
 
 
 def toy_of(ob):
-    a = _api()
-    return a.toy_root(ob) if a is not None and ob is not None else None
+    return samp.toy_root(ob) if ob is not None else None
 
 
 def bone_label(bone):
-    a = _api()
-    for sid, label, _gid in (a.SAMP_BONES if a is not None else ()):
+    for sid, label, _gid in samp.SAMP_BONES:
         if sid == bone:
             return label
     return "not a SA-MP bone"
@@ -32,11 +26,10 @@ def bone_label(bone):
 # Live values: read from the toy's transform each time the panel draws (one object, no scanning),
 # so they follow the gizmo; typing a value moves the toy.
 def _values(self):
-    a = _api()
     ob = self.id_data
-    if a is None or a.toy_root(ob) is not ob:
+    if samp.toy_root(ob) is not ob:
         return None
-    return a.toy_values(ob)
+    return samp.toy_values(ob)
 
 
 def _getter(key, default):
@@ -48,9 +41,8 @@ def _getter(key, default):
 
 def _setter(key):
     def set_(self, value):
-        a = _api()
-        if a is not None and a.toy_root(self.id_data) is self.id_data:
-            a.set_toy_values(self.id_data, **{key: tuple(value)})
+        if samp.toy_root(self.id_data) is self.id_data:
+            samp.set_toy_values(self.id_data, **{key: tuple(value)})
     return set_
 
 
@@ -60,19 +52,17 @@ def _get_index(self):
 
 
 def _set_index(self, value):
-    a = _api()
-    if a is not None and a.toy_root(self.id_data) is self.id_data:
-        a.set_toy_values(self.id_data, index=value)
+    if samp.toy_root(self.id_data) is self.id_data:
+        samp.set_toy_values(self.id_data, index=value)
 
 
 _BONE_ITEMS = []          # kept alive for Blender (dynamic enum items must stay referenced)
 
 
 def _bone_items(self, context):
-    a = _api()
-    if not _BONE_ITEMS and a is not None:
+    if not _BONE_ITEMS:
         _BONE_ITEMS.extend((str(sid), "%d  %s" % (sid, label), "SA-MP bone %d: %s" % (sid, label), sid)
-                           for sid, label, _gid in a.SAMP_BONES)
+                           for sid, label, _gid in samp.SAMP_BONES)
     return _BONE_ITEMS or [("0", "-", "", 0)]
 
 
@@ -82,10 +72,9 @@ def _get_bone(self):
 
 
 def _set_bone(self, value):
-    a = _api()
-    if a is not None and a.toy_root(self.id_data) is self.id_data and value:
+    if samp.toy_root(self.id_data) is self.id_data and value:
         try:
-            a.set_toy_values(self.id_data, bone=value)
+            samp.set_toy_values(self.id_data, bone=value)
         except ValueError as e:
             print("[GTA SA Toolkit]", e)
 
@@ -109,18 +98,16 @@ class GTASTUDIO_ToyProps(bpy.types.PropertyGroup):
 
 
 def toy_line(toy):
-    a = _api()
-    return a.attached_line(a.toy_values(toy))
+    return samp.attached_line(samp.toy_values(toy))
 
 
 # ----------------------------------------------------------------------------- pawn export
 def export_lines(objects, dynamic):
     """Lines for the map objects among these (parts count once). Returns (lines, skipped, scaled)."""
-    a = _api()
     roots, skipped = [], 0
     seen = set()
     for ob in objects:
-        r = a.map_object_root(ob)
+        r = samp.map_object_root(ob)
         if r is None:
             skipped += 1
         elif r.name not in seen:
@@ -128,8 +115,8 @@ def export_lines(objects, dynamic):
             roots.append(r)
     roots.sort(key=lambda o: o.name)
     lines, scaled = [], 0
-    for _ob, (model, pos, rot, sc) in a.map_object_values(roots):
-        lines.append(a.object_line(model, pos, rot, dynamic))
+    for _ob, (model, pos, rot, sc) in samp.map_object_values(roots):
+        lines.append(samp.object_line(model, pos, rot, dynamic))
         if any(abs(s - 1.0) > 0.001 for s in sc):
             scaled += 1
     return lines, skipped, scaled
@@ -145,13 +132,7 @@ def _report_export(op, n, skipped, scaled, where):
                   % (scaled, "" if scaled == 1 else "s"))
 
 
-class _NeedsCore:
-    @classmethod
-    def poll(cls, context):
-        return corelink.api() is not None
-
-
-class GTASTUDIO_OT_copy_toy_line(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_copy_toy_line(bpy.types.Operator):
     bl_idname = "gtastudio.copy_toy_line"
     bl_label = "Copy SetPlayerAttachedObject"
     bl_description = "Copy the finished SetPlayerAttachedObject(...) line for the selected toy to the clipboard"
@@ -167,7 +148,7 @@ class GTASTUDIO_OT_copy_toy_line(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_pawn_copy(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_pawn_copy(bpy.types.Operator):
     bl_idname = "gtastudio.pawn_copy"
     bl_label = "Copy to Clipboard"
     bl_description = "Copy the selected map objects to the clipboard as Pawn code"
@@ -182,7 +163,7 @@ class GTASTUDIO_OT_pawn_copy(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_pawn_save(_NeedsCore, bpy.types.Operator, ExportHelper):
+class GTASTUDIO_OT_pawn_save(bpy.types.Operator, ExportHelper):
     bl_idname = "gtastudio.pawn_save"
     bl_label = "Save .pwn"
     bl_description = "Save the selected map objects as Pawn code in a .pwn file"
@@ -247,17 +228,17 @@ SECTIONS = (
 AREA_OF = {"toy": "toys", "pawn": "pawn", "paths": "paths"}       # section -> preference switch
 
 
-def add_sections(api, areas=("toys", "pawn", "paths")):
+def add_sections(areas=("toys", "pawn", "paths")):
     for tab, sid, title, fn, order, icon, closed in SECTIONS:
         if AREA_OF[sid] not in areas:
             continue
-        api.register_section(tab, "st_" + sid, title, fn, order=order, icon=icon, closed=closed,
-                             panel_id="GTASTUDIO_edit_" + sid)
+        tabs.register_section(tab, "st_" + sid, title, fn, order=order, icon=icon, closed=closed,
+                              panel_id="GTASTUDIO_edit_" + sid)
 
 
-def remove_sections(api):
+def remove_sections():
     for tab, sid, *_rest in SECTIONS:
-        api.unregister_section(tab, "st_" + sid)
+        tabs.unregister_section(tab, "st_" + sid)
 
 
 def draw_edit(layout, context):
@@ -274,10 +255,10 @@ def draw_toy(layout, context):
         col.label(text="(attach one in SA-MP Toys above)", icon='BLANK1')
         return
     t = toy.gta_toy_studio
-    v = _api().toy_values(toy)
+    v = samp.toy_values(toy)
     layout.label(text="%s  ·  model %d" % (toy.name, v["model"]), icon='OBJECT_DATA')
     r = layout.row()
-    if any(sid == v["bone"] for sid, _l, _g in _api().SAMP_BONES):
+    if any(sid == v["bone"] for sid, _l, _g in samp.SAMP_BONES):
         r.prop(t, "bone", text="", icon='BONE_DATA')
     else:
         r.label(text="Bone: %s" % bone_label(v["bone"]), icon='BONE_DATA')

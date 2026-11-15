@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.0.0 — first public release
+## 1.0.1
+
+Changes asked for in the extensions.blender.org review:
+
+- Nothing runs when a file opens or saves anymore. Files made with an older, pre-release version are
+  updated with the Update Older File button in the add-on's preferences.
+- Textures are packed into the .blend as they're imported (faster than before, too).
+- The Studio part is a normal part of the add-on now. Its switches in the preferences show or hide its
+  tabs and sections.
+- The only tag is Import-Export.
+
+## 1.0.0 (first public release)
 
 - Map import (areas picked on the radar map with a preview, or whole sections) with textures, 2DFX
   lights and collisions; skip already placed objects; remove an import in one click.

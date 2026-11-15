@@ -2,7 +2,7 @@
 #   Camera rig : "GTA Camera" aimed at a "GTA Camera Target" empty (Track To), lens from the preset.
 #   Turntable  : "GTA Turntable" empty at the model's centre turning 360 degrees over N frames (linear
 #                keys, so frame N+1 = frame 1 and playback loops), "GTA Turntable Camera" parented to it.
-#   Map area   : "GTA Map Camera" framing the selected map import (core's api.import_bounds) from a
+#   Map area   : "GTA Map Camera" framing the selected map import (mapimport.import_bounds) from a
 #                3/4 view, plus render settings (1920x1080, EEVEE).
 # Everything lives in a "GTA Studio" collection; running a helper again reuses its objects.
 import math
@@ -10,7 +10,7 @@ import math
 import bpy
 from mathutils import Vector
 
-from . import corelink
+from .. import mapimport
 
 LENS_FOV = {'GAMEPLAY': 70.0, 'CINEMATIC': 40.0, 'ZOOM': 20.0, 'WIDE': 90.0}   # horizontal degrees
 COLL_NAME = "GTA Studio"
@@ -193,8 +193,7 @@ def frame_map_area(context, num=None):
     """Camera + render settings for a map import (num=None: the one selected in the World tab).
     Returns (camera, bounds dict) or raises ValueError."""
     scene = context.scene
-    api = corelink.api()
-    info = api.import_bounds(num) if api else None
+    info = mapimport.import_bounds(num)
     if info is None:
         raise ValueError("No imported map to frame: import a map area first")
     mn, mx = Vector(info["min"]), Vector(info["max"])

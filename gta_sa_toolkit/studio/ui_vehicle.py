@@ -1,5 +1,6 @@
 # GTA SA Studio - its sections in core's Vehicles tab: the selected vehicle, then its colours, lights,
 # paintjobs, doors/extras and upgrades. Draws only what vehicle.setup() stored on the vehicle's root.
+from .. import tabs
 from . import vehicle
 from .vehicle import PAINT_LABELS
 
@@ -142,15 +143,15 @@ SECTIONS = (
 )
 
 
-def add_sections(api):
+def add_sections():
     for sid, title, fn, order, icon, closed, poll in SECTIONS:
-        api.register_section('VEHICLE', "st_" + sid, title, fn, order=order, icon=icon, closed=closed, poll=poll,
-                             panel_id="GTASTUDIO_veh_" + sid)
+        tabs.register_section('VEHICLE', "st_" + sid, title, fn, order=order, icon=icon, closed=closed, poll=poll,
+                              panel_id="GTASTUDIO_veh_" + sid)
 
 
-def remove_sections(api):
+def remove_sections():
     for sid, *_rest in SECTIONS:
-        api.unregister_section('VEHICLE', "st_" + sid)
+        tabs.unregister_section('VEHICLE', "st_" + sid)
 
 
 def draw_vehicle(layout, context):

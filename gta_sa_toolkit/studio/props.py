@@ -6,7 +6,7 @@ from bpy.props import (BoolProperty, EnumProperty, FloatProperty, FloatVectorPro
 
 from . import timecyc
 
-# light groups Studio has settings for (keys of core's api.LIGHT_CATEGORIES)
+# light groups Studio has settings for (keys of lighttags.CATEGORIES)
 CAT_KEYS = ('STREET', 'TRAFFIC', 'NEON', 'BUILDING', 'BLINK', 'VEHICLE')
 
 _MUTE = {"on": False}          # set while settings are copied in bulk (no apply per property)

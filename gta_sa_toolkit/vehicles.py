@@ -162,7 +162,7 @@ def _hide(ob, state=True):
 
 
 def import_vehicle(context, game, name, colours=None, colour_set=-1, hide_damage=True,
-                   hide_lod=True, pack=True, location=None, rotation_z=0.0):
+                   hide_lod=True, pack=None, location=None, rotation_z=0.0):
     """Import a vehicle by model name or ID. colours: list of carcols indices (overrides colour_set)."""
     vdef = None
     key = str(name).strip()
@@ -175,7 +175,9 @@ def import_vehicle(context, game, name, colours=None, colour_set=-1, hide_damage
         raise RuntimeError("'%s.dff' not found in the IMG archives" % model)
     txd = vdef.txd if vdef else model
     opts = {'connect_bones': False, 'use_mat_split': False, 'remove_doubles': False}
-    coll, _hit = mapimport.build_model(game, model, txd, opts, mapimport.TxdCache(game, False),
+    if pack is None:
+        pack = mapimport.pack_setting()
+    coll, _hit = mapimport.build_model(game, model, txd, opts, mapimport.TxdCache(game, pack),
                                        extra_parents=("vehicle",))
     game.imgs.close()
     root = finish_vehicle(coll, game, vdef, model, colours, colour_set, hide_damage, hide_lod, location,

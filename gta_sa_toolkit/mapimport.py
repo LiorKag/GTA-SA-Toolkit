@@ -29,6 +29,54 @@ def get_game(root, reload=False):
     return _GAME["data"]
 
 
+def current_game(reload=False):
+    """The game of the folder set in the panel (get_game for the current scene's game_root)."""
+    return get_game(bpy.context.scene.gta_tk.game_root, reload=reload)
+
+
+def pack_setting():
+    """The panel's Pack Images switch (images go into the .blend as they are made)."""
+    return getattr(bpy.context.scene.gta_tk, "pack_images", True)
+
+
+def game_file(relpath, root=None):
+    """Absolute path of a file in the game folder, e.g. game_file("data/timecyc.dat"), or None when
+    no folder is set or the file isn't there. root defaults to the folder set in the panel."""
+    if root is None:
+        root = bpy.context.scene.gta_tk.game_root
+    if not root:
+        return None
+    path = os.path.join(bpy.path.abspath(root), *relpath.replace("\\", "/").split("/"))
+    return path if os.path.isfile(path) else None
+
+
+def import_bounds(num=None):
+    """Where a map import sits: {"num", "name", "count", "min": (x, y, z), "max": (x, y, z)} from the
+    positions of its placed objects, or None. num=None: the import selected in the World tab's list.
+    Walks the scene's objects once: call it from a button, never from draw()."""
+    sc = bpy.context.scene
+    p = sc.gta_tk
+    if not p.imports:
+        return None
+    if num is None:
+        it = p.imports[min(max(p.imports_index, 0), len(p.imports) - 1)]
+    else:
+        it = next((i for i in p.imports if i.num == num), None)
+        if it is None:
+            return None
+    mn, mx, n = [float("inf")] * 3, [float("-inf")] * 3, 0
+    for o in sc.objects:
+        if o.get("gta_import") == it.num:
+            t = o.matrix_world.translation
+            for k in range(3):
+                mn[k] = min(mn[k], t[k])
+                mx[k] = max(mx[k], t[k])
+            n += 1
+    if not n:
+        return None
+    return {"num": it.num, "name": it.name, "count": n, "min": tuple(mn), "max": tuple(mx)}
+
+
 def exterior(inst):
     return (inst.interior & 0xFF) in (0, 13)
 
@@ -56,6 +104,20 @@ def _make_image(name, rgba, w, h, pack):
     if img and img.size[0] == w and img.size[1] == h:
         return img
     img = bpy.data.images.new(name, w, h, alpha=True)
+    if pack:
+        # straight into the .blend as a PNG (our writer is ~3x faster than img.pack(), which encodes the
+        # pixels itself); the pixels are read from it when first needed. Same result as pixels + pack()
+        import numpy as np
+        from .formats import png
+        if isinstance(rgba, np.ndarray):
+            arr = rgba
+        else:
+            arr = np.frombuffer(bytes(rgba), dtype=np.uint8)[: w * h * 4].reshape(h, w, 4)
+        data = png.rgba(np.ascontiguousarray(arr))
+        img.pack(data=data, data_len=len(data))
+        img.source = 'FILE'
+        img["gta_tk_tex"] = True
+        return img
     try:
         import numpy as np
         if isinstance(rgba, np.ndarray):
@@ -73,24 +135,7 @@ def _make_image(name, rgba, w, h, pack):
                 px[dst + i] = rb[src + i] / 255.0
         img.pixels.foreach_set(px)
     img["gta_tk_tex"] = True
-    if pack == 'NOW':
-        img.pack()
     return img
-
-
-def pack_pending_images():
-    """Pack GTA textures that were created in memory (called right before the .blend is saved)."""
-    n = 0
-    for img in bpy.data.images:
-        # has_data: made in memory. FILE: loaded from the asset cache (pixels maybe not read yet);
-        # packing it keeps the .blend working even after the cache is cleared
-        if img.get("gta_tk_tex") and img.packed_file is None and (img.has_data or img.source == 'FILE'):
-            try:
-                img.pack()
-                n += 1
-            except RuntimeError:
-                pass
-    return n
 
 
 def _as_array(rgba, w, h):
@@ -558,7 +603,7 @@ class MapImportJob:
         self.cache_open = False
         self.loaded = None             # id -> cache.Loaded, fetched at the first step
         self.from_cache = 0
-        self.txd = TxdCache(game, False) if props.load_textures else None
+        self.txd = TxdCache(game, getattr(props, "pack_images", True)) if props.load_textures else None
         self.share = {} if getattr(props, "share_materials", True) else None   # materials shared by the import
         scene_root = context.scene.collection
         self.lib = _ensure_child_collection(scene_root, LIB_NAME, exclude=True)
@@ -875,7 +920,7 @@ def import_model_from_img(context, game, name, load_textures=True, pack=True, co
     od = game.by_name.get(name.lower())
     txd_name = od.txd if od else name
     opts = {'connect_bones': connect_bones, 'use_mat_split': False, 'remove_doubles': False}
-    coll, _hit = build_model(game, name, txd_name, opts, TxdCache(game, False) if load_textures else None)
+    coll, _hit = build_model(game, name, txd_name, opts, TxdCache(game, pack) if load_textures else None)
     game.imgs.close()
     try:
         from . import lighttags

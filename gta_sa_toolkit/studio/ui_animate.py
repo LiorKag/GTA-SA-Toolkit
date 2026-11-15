@@ -5,7 +5,8 @@ import bpy
 from bpy.props import EnumProperty, IntProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from . import animate, corelink
+from .. import ui
+from . import animate
 
 
 def _ped(context):
@@ -15,7 +16,7 @@ def _ped(context):
 class _NeedsPed:
     @classmethod
     def poll(cls, context):
-        return corelink.api() is not None and _ped(context) is not None
+        return _ped(context) is not None
 
 
 # ----------------------------------------------------------------------------- lists
@@ -36,7 +37,7 @@ class GTASTUDIO_OT_anim_add(_NeedsPed, bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        picked = corelink.api().selected_anim(context.scene)
+        picked = ui.selected_anim(context.scene)
         if picked is None:
             self.report({'ERROR'}, "Pick an IFP and an animation in the list first")
             return {'CANCELLED'}
@@ -221,9 +222,8 @@ def draw_animate(layout, context):
 
     b = _section(layout, "add", "Add Clip", 'ADD')
     if b:
-        a = corelink.api()
-        a.draw_ifp_browser(b, context, rows=5)          # the same list as the Peds tab
-        if a.selected_anim(context.scene) is not None:
+        ui.draw_ifp_browser(b, context, rows=5)         # the same list as the Peds tab
+        if ui.selected_anim(context.scene) is not None:
             r = b.row()
             r.scale_y = 1.2
             r.operator("gtastudio.anim_add", icon='ADD')

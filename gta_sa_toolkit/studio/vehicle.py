@@ -3,7 +3,7 @@
 #                slots, lights, doors, extras, paintjobs and upgrade slots it has on its root
 #                object (Object.gta_vehicle_studio), so the tab only draws stored values.
 #   apply_*()    called by the settings' update callbacks; they touch only that vehicle.
-# Game data (palette, colour sets, paintjob textures, upgrade models) comes from core's api.
+# Game data (palette, colour sets, paintjob textures, upgrade models) comes from vehicles.py / mapimport.py.
 # Enum lists with swatches / previews are built once per session (lazily through a one-shot timer
 # when first drawn) and cached here; Blender only borrows the strings, so the lists must stay alive.
 import math
@@ -12,7 +12,8 @@ import bpy
 import bpy.utils.previews
 from mathutils import Matrix, Vector
 
-from . import corelink
+from .. import mapimport, vehicles
+from ..formats import carmods
 
 _MUTE = {"on": False}              # set while setup() fills in settings (no apply per property)
 _C = {"palette": None, "pal_rgb": [], "sets": {}, "pj": {}, "upg": {}, "data": {}}
@@ -128,13 +129,20 @@ def _image_preview(key, img, size=96):
 
 
 def _game_ready():
-    api = corelink.api()
-    if api is None:
-        return None
     try:
-        return api.get_game()
+        return mapimport.current_game()
     except Exception:              # noqa - no game folder set
         return None
+
+
+def paintjob_image(model, n):
+    """Paintjob n (1-based) of a model as an image, loaded once and reused; None if missing."""
+    return vehicles.paintjob_image(mapimport.current_game(), model, int(n), mapimport.pack_setting())
+
+
+def import_part(name):
+    """Build an upgrade part at the origin in a new collection. Returns (collection, objects)."""
+    return vehicles.import_part(mapimport.current_game(), name, mapimport.pack_setting())
 
 
 def build_palette():
@@ -152,7 +160,7 @@ def build_palette():
 def vehicle_data(model):
     key = model.lower()
     if key not in _C["data"]:
-        _C["data"][key] = corelink.api().vehicle_data(model)
+        _C["data"][key] = vehicles.vehicle_data(mapimport.current_game(), model)
     return _C["data"][key]
 
 
@@ -170,11 +178,10 @@ def build_sets(model):
 
 
 def build_paintjobs(model):
-    api = corelink.api()
     n = vehicle_data(model)["paintjobs"]
     items = [('0', "Plain Paint", "The body colours, no paintjob", 'BRUSH_DATA', 0)]
     for i in range(1, n + 1):
-        img = api.paintjob_image(model, i)
+        img = paintjob_image(model, i)
         icon = _image_preview("pj:%s:%d" % (model.lower(), i), img) if img is not None else 'IMAGE_DATA'
         items.append((str(i), "Paintjob %d" % i, "%s%d.txd" % (model.lower(), i), icon, i))
     _C["pj"][model.lower()] = items
@@ -325,7 +332,6 @@ def is_current(root):
 def setup(root, objs=None):
     """Store what this vehicle has (see the top of the file). objs: its objects when known (an
     import hands them over), else they are collected from the root."""
-    api = corelink.api()
     vs = root.gta_vehicle_studio
     objs = vehicle_objects(root) if objs is None else [o for o in objs if o is root or find_root(o) is root]
     model = root["gta_vehicle"]
@@ -363,8 +369,8 @@ def setup(root, objs=None):
         vs.parts.clear()
         flags = data["model_flags"]
         hinges = list(DOORS) + [("bonnet_dummy", "Bonnet")]
-        if not flags & api.FLAG_NOSWING_BOOT:
-            hinges.append(("boot_dummy", "Tailgate" if flags & api.FLAG_TAILGATE_BOOT else "Boot"))
+        if not flags & carmods.FLAG_NOSWING_BOOT:
+            hinges.append(("boot_dummy", "Tailgate" if flags & carmods.FLAG_TAILGATE_BOOT else "Boot"))
         for dname, label in hinges:
             d = names.get(dname)
             part = _visible_child(d, children) if d is not None else None
@@ -374,7 +380,7 @@ def setup(root, objs=None):
                 kind, axis, ang = 'DOOR', 2, _hinge(d, part, 2, DOOR_ANGLE, 'OUT')
             elif dname == "bonnet_dummy":
                 kind, axis, ang = 'BONNET', 0, _hinge(d, part, 0, BONNET_ANGLE, 'UP')
-            elif flags & api.FLAG_TAILGATE_BOOT:
+            elif flags & carmods.FLAG_TAILGATE_BOOT:
                 kind, axis, ang = 'BOOT', 0, _hinge(d, part, 0, TAILGATE_ANGLE, 'OUT')
             else:
                 kind, axis, ang = 'BOOT', 0, _hinge(d, part, 0, BOOT_ANGLE, 'UP')
@@ -390,7 +396,7 @@ def setup(root, objs=None):
                 it.kind, it.label, it.obj, it.shown = 'EXTRA', "Extra %d" % i, e, not e.hide_viewport
         # upgrade slots, in the game's order
         vs.upgrades.clear()
-        for kind, label, _prefix in api.UPGRADE_KINDS:
+        for kind, label, _prefix in carmods.UPGRADE_KINDS:
             if kind in data["upgrades"] and kind not in SKIP_KINDS:
                 it = vs.upgrades.add()
                 it.kind = kind
@@ -406,9 +412,9 @@ def setup(root, objs=None):
 
 
 def on_import(objects):
-    """core's on_import_done (through lighting._on_import): set up the vehicles this import made."""
+    """After every import (through lighting.on_import): set up the vehicles this import made."""
     roots = [o for o in objects if o.get("gta_vehicle") and o.parent is None]
-    if not roots or corelink.api() is None:
+    if not roots:
         return
     groups = {r: [] for r in roots}          # one pass: SA-MP map code can bring hundreds of cars
     for o in objects:
@@ -445,9 +451,6 @@ def current_colours(root):
 def apply_paint(root, objs=None):
     if _MUTE["on"]:
         return
-    api = corelink.api()
-    if api is None:
-        return
     if _C["palette"] is None:
         build_palette()
     rgb, idx = current_colours(root)
@@ -457,7 +460,7 @@ def apply_paint(root, objs=None):
             continue
         slot = int(m["gta_paint_slot"])
         # a paintjob texture carries its own colours: the game doesn't tint it
-        api.paint_vehicle_material(m, (1.0, 1.0, 1.0) if (pj and "gta_stock_image" in m) else rgb[slot])
+        vehicles.tint_material(m, (1.0, 1.0, 1.0) if (pj and "gta_stock_image" in m) else tuple(rgb[slot]))
     root["gta_colours"] = idx[:4 if root.gta_vehicle_studio.slots > 0b11 else 2]
 
 
@@ -512,11 +515,11 @@ def light_material(m, root, scene):
     vs = root.gta_vehicle_studio
     kind = m.get("gta_vehicle_light")
     tint = vs.head_tint if kind == "head" else vs.tail_tint
-    corelink.api().set_vehicle_light(m, tuple(tint), light_strength(vs, kind, scene.gta_studio.hour))
+    vehicles.set_emission(m, tuple(tint), light_strength(vs, kind, scene.gta_studio.hour))
 
 
 def apply_lights(root, scene):
-    if _MUTE["on"] or corelink.api() is None:
+    if _MUTE["on"]:
         return
     vs = root.gta_vehicle_studio
     mats = [m for m in _materials(vehicle_objects(root)) if m.get("gta_vehicle_light")]
@@ -542,13 +545,12 @@ def _is_remap(img):
 def apply_paintjob(root):
     if _MUTE["on"]:
         return
-    api = corelink.api()
     vs = root.gta_vehicle_studio
     try:
         n = int(vs.paintjob)
     except ValueError:
         return
-    img = api.paintjob_image(vs.model, n) if n > 0 else None
+    img = paintjob_image(vs.model, n) if n > 0 else None
     if n > 0 and img is None:
         return
     for m in _materials(vehicle_objects(root)):
@@ -591,7 +593,7 @@ def apply_part(root, part):
 # ----------------------------------------------------------------------------- upgrades
 def upgrade_kind(name):
     n = name.lower()
-    for kind, _label, prefix in corelink.api().UPGRADE_KINDS:
+    for kind, _label, prefix in carmods.UPGRADE_KINDS:
         if n.startswith(prefix):
             return kind
     return 'MISC'
@@ -658,8 +660,7 @@ def _size(mesh):
 
 
 def _put_wheels(root, name, objs):
-    api = corelink.api()
-    coll, new = api.import_vehicle_part(name)
+    coll, new = import_part(name)
     src = next((o for o in new if o.type == 'MESH' and not _is_collision(o)), None)
     if src is None:
         raise RuntimeError("%s has no wheel mesh" % name)
@@ -676,7 +677,7 @@ def _put_wheels(root, name, objs):
         if "gta_stock_mesh" not in o:
             o["gta_stock_mesh"] = o.data.name
         o.data = mesh
-    api.paint_vehicle_objects(stock[:1], current_colours(root)[0])
+    vehicles.paint_vehicle(stock[:1], [tuple(c) for c in current_colours(root)[0]])
     for o in list(coll.all_objects):
         bpy.data.objects.remove(o)
     for child in list(coll.children_recursive):
@@ -687,7 +688,6 @@ def _put_wheels(root, name, objs):
 
 def put_upgrade(root, slot_kind, name, objs):
     """Build one part and put it on its spot. Returns the objects added."""
-    api = corelink.api()
     kind = upgrade_kind(name)
     if kind == 'MISC':
         letter = name.lower().split("_")[1] if name.count("_") >= 2 else "a"
@@ -698,7 +698,7 @@ def put_upgrade(root, slot_kind, name, objs):
     for o in objs:
         names.setdefault(base_name(o).lower(), o)
     target = names.get(spot) if spot else None
-    coll, new = api.import_vehicle_part(name)
+    coll, new = import_part(name)
     added = _take_in(root, coll, new)
     # like the game, only the part's geometry is used: it goes on the frame of the stock part it
     # replaces (bumpers, exhaust) or on the car's ug_* spot; the part file's own frames are dropped
@@ -725,12 +725,12 @@ def put_upgrade(root, slot_kind, name, objs):
     if stock is not None and not stock.hide_render:
         _hide(stock, True)
         stock["gta_hidden_by"] = slot_kind
-    api.paint_vehicle_objects(added, current_colours(root)[0])
+    vehicles.paint_vehicle(added, [tuple(c) for c in current_colours(root)[0]])
     return added
 
 
 def apply_upgrade(root, slot):
-    if _MUTE["on"] or corelink.api() is None:
+    if _MUTE["on"]:
         return
     remove_upgrade(root, slot.kind)
     name = slot.choice

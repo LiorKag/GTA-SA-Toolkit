@@ -1,7 +1,7 @@
 # GTA SA Studio - map lighting and time/weather.
-#   Map lights: per-group strength/tint for the GTA lights core tags at import (see core's api.py),
-#   shadows, and night-only lamps following the hour. Studio hears about new lights from core's
-#   on_import_done event and only touches those; the whole file is walked only when a setting changes.
+#   Map lights: per-group strength/tint for the GTA lights the importers tag (lighttags.py),
+#   shadows, and night-only lamps following the hour. Every finished import calls on_import() with what
+#   it made (events.py), so only new lights are touched; the whole file is walked only when a setting changes.
 #   Sky, sun and fog: from the game's timecyc.dat (timecyc.py) for the chosen hour and weather; the
 #   sun's path is worked out from the hour (timecyc.dat doesn't store it). Without a readable
 #   timecyc.dat, built-in day/dusk/night looks are blended by hour instead.
@@ -10,7 +10,8 @@ import math
 import bpy
 from mathutils import Vector
 
-from . import corelink
+from .. import mapimport, vehicles
+from . import switches
 from .props import _MUTE, CAT_KEYS
 
 
@@ -54,10 +55,7 @@ def apply(scene, lights=None, materials=None):
         d.color = _mix(bc, list(cp.tint), cp.tint_amount)
         d.shadow_soft_size = p.light_radius
         d.use_shadow = p.light_shadows and cp.cast_shadows
-    # vehicle light materials (emission, set through core)
-    api = corelink.api()
-    if api is None:
-        return
+    # vehicle light materials (emission)
     vp = p.cat_vehicle
     strength = (vp.strength * master * 4.0 * max(nf, 0.0 if p.lights_follow_time else 1.0)) \
         if (vp.enabled and master > 0) else 0.0
@@ -76,7 +74,7 @@ def apply(scene, lights=None, materials=None):
                 continue
         col = (1.0, 0.95, 0.85) if kind == "head" else (0.9, 0.05, 0.03)
         try:
-            api.set_vehicle_light(m, _mix(col, list(vp.tint), vp.tint_amount), strength)
+            vehicles.set_emission(m, _mix(col, list(vp.tint), vp.tint_amount), strength)
         except Exception:        # noqa
             pass
 
@@ -115,16 +113,15 @@ def _builtin_sample(hour):
 
 
 def timecyc_path():
-    """Studio's Preferences override, else the game folder's data/timecyc.dat (through core)."""
+    """The Preferences' timecyc.dat, else the game folder's data/timecyc.dat."""
     try:
-        prefs = corelink.prefs()
+        prefs = switches.prefs()
         own = bpy.path.abspath(prefs.timecyc_path) if prefs.timecyc_path else ""
     except (KeyError, AttributeError):
         own = ""
     if own:
         return own
-    api = corelink.api()
-    return api.game_file("data/timecyc.dat") if api is not None else None
+    return mapimport.game_file("data/timecyc.dat")
 
 
 def sample(scene):
@@ -367,9 +364,9 @@ def migrate_old_settings(scene):
     return moved
 
 
-# ----------------------------------------------------------------------------- core events
-def _on_import(objects):
-    """core's on_import_done: set up just the lights and vehicle lights this import created."""
+# ----------------------------------------------------------------------------- after imports
+def on_import(objects):
+    """After every import (events.py): set up just the lights and vehicle lights it created."""
     sc = bpy.context.scene
     if getattr(sc, "gta_studio", None) is None:
         return
@@ -392,46 +389,7 @@ def _on_import(objects):
     refresh_counts(sc)              # every import: new copies of lamps already in the file count too
 
 
-def _on_removed():
+def on_removed():
     sc = bpy.context.scene
     if getattr(sc, "gta_studio", None) is not None:
         refresh_counts(sc)
-
-
-def _prepare_file():
-    for sc in bpy.data.scenes:
-        if getattr(sc, "gta_studio", None) is not None:
-            migrate_old_settings(sc)
-            refresh_counts(sc)
-
-
-def connect(api):
-    api.on_import_done(_on_import)
-    api.on_import_removed(_on_removed)
-    try:
-        _prepare_file()
-    except Exception:            # noqa - restricted context while Blender starts: load_post does it
-        pass
-
-
-def disconnect(api):
-    api.remove_listener(_on_import)
-    api.remove_listener(_on_removed)
-
-
-@bpy.app.handlers.persistent
-def _on_load(*_):
-    try:
-        _prepare_file()
-    except Exception as e:       # noqa
-        print("[GTA SA Toolkit] lighting:", e)
-
-
-def register():
-    if _on_load not in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.append(_on_load)
-
-
-def unregister():
-    if _on_load in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.remove(_on_load)

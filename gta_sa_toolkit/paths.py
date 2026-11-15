@@ -17,6 +17,12 @@ def _key(game):
     return tuple(out)
 
 
+def current_graph(reload=False):
+    """The graph of the game folder set in the panel."""
+    from . import mapimport
+    return graph(mapimport.current_game(), reload=reload)
+
+
 def graph(game, reload=False):
     """PathGraph of all 64 areas of this game."""
     key = _key(game)

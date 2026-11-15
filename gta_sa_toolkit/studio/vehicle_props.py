@@ -79,7 +79,7 @@ class GTASTUDIO_VehPart(bpy.types.PropertyGroup):
 
 
 class GTASTUDIO_VehUpgrade(bpy.types.PropertyGroup):
-    kind: StringProperty()             # api.UPGRADE_KINDS key
+    kind: StringProperty()             # carmods.UPGRADE_KINDS key
     label: StringProperty()
     choice: EnumProperty(name="Part", items=_upgrade_items, update=_upd_upgrade)
 

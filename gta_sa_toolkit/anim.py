@@ -384,3 +384,28 @@ def bake_action_to_anim(context, arm_obj, act, anim_name, fps, frame_start, fram
     ad.action = old_action
     scene.frame_set(old_frame)
     return anim
+
+
+# ----------------------------------------------------------------------------- short forms (Studio)
+def apply_ifp(armature, anim, start_frame=1.0, fps=30.0, root_mode='BONE', new_action=True,
+              action_name=None, clear_pose=True):
+    """Put an IFP animation onto a ped armature as an action. root_mode: 'BONE' (travel on the root
+    bone), 'OBJECT' (travel on the armature object), 'INPLACE' or 'NONE'.
+    Returns (action, [names of bones not found])."""
+    o = ApplyOptions()
+    o.fps, o.start_frame, o.root_mode = float(fps), float(start_frame), root_mode
+    o.new_action, o.clear_pose = new_action, clear_pose
+    return apply_animation(armature, anim, o, action_name=action_name)
+
+
+def bake_ifp(armature, action=None, name=None, fps=30.0, frame_start=None, frame_end=None, step=1):
+    """Sample an action on the armature into an IFP animation (root motion on the object is folded
+    back into the root bone). Defaults: the armature's current action and its frame range."""
+    act = action or (armature.animation_data.action if armature.animation_data else None)
+    if act is None:
+        raise ValueError("the armature has no action to bake")
+    f0, f1 = act.frame_range
+    name = name or act.get("ifp_anim_name") or act.name.split(":")[-1]
+    return bake_action_to_anim(bpy.context, armature, act, name, float(fps),
+                               f0 if frame_start is None else frame_start,
+                               f1 if frame_end is None else frame_end, step)

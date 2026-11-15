@@ -1,11 +1,11 @@
-# GTA SA Studio - the Scene tab (inside the "GTA SA Toolkit" panel) and plugging Studio's tabs and
-# sections into the panel. Draw code only reads stored values.
+# GTA SA Studio - the Scene tab (inside the "GTA SA Toolkit" panel), and show_tabs(): Studio's tabs and
+# sections for the areas switched on in the preferences. Draw code only reads stored values.
 import os
 
 import bpy
 
-
-from . import corelink, lighting, ops
+from .. import lighttags, tabs
+from . import lighting, ops
 from .props import PRESET_HOURS
 
 ICON_DIR = os.path.join(os.path.dirname(__file__), "icons")
@@ -29,7 +29,6 @@ SHADOW_WARN = 250
 
 def draw_scene(layout, context):
     p = context.scene.gta_studio
-    api = corelink.api()
     c = lighting.stored_counts(context.scene)      # stored after imports / Find Lights, never counted here
     total = sum(v for k, v in c.items() if k != 'VEHICLE')
     b = _section(layout, "time", "Time & Weather", 'TIME')
@@ -104,7 +103,7 @@ def draw_scene(layout, context):
 
     b = _section(layout, "groups", "Light Groups", 'OUTLINER_OB_LIGHT')
     if b:
-        for key, label, _ in (api.LIGHT_CATEGORIES if api else ()):
+        for key, label, _ in lighttags.CATEGORIES:
             cp = getattr(p, "cat_" + key.lower(), None)
             if cp is None:                     # a group newer than this Studio
                 continue
@@ -142,34 +141,31 @@ def draw_camera(layout, context):
     b.operator("gtastudio.frame_map_area", icon='RENDER_STILL')
 
 
-def _tab(api, draw_fn):
-    api.register_tab("SCENE", "Scene", "Scene", os.path.join(ICON_DIR, "tab_scene.png"), draw_fn, order=60,
-                     icon_active=os.path.join(ICON_DIR, "tab_scene_on.png"),
-                     description="Time of day and map lighting (GTA SA Studio)")
-
-
-def add_tabs(api, areas):
-    """Studio's own tabs (Animate, Scene) and its sections in core's tabs (Vehicles, Peds, World), for the
-    areas switched on (corelink.AREAS)."""
+def show_tabs(areas):
+    """Studio's own tabs (Animate, Scene) and its sections in the other tabs (Vehicles, Peds, World), for
+    these areas (switches.AREAS) only; the others are taken out."""
     from . import edit, ui_vehicle
+    hide_tabs()
     if "scene" in areas:
-        _tab(api, draw_scene)
+        tabs.register_tab("SCENE", "Scene", "Scene", os.path.join(ICON_DIR, "tab_scene.png"), draw_scene,
+                          order=60, icon_active=os.path.join(ICON_DIR, "tab_scene_on.png"),
+                          description="Time of day and map lighting (GTA SA Studio)")
     if "animate" in areas:
         from .ui_animate import draw_animate
-        api.register_tab("ANIMATE", "Animate", "Animate", os.path.join(ICON_DIR, "tab_animate.png"), draw_animate,
-                         order=50, icon_active=os.path.join(ICON_DIR, "tab_animate_on.png"),
-                         description="Combine IFP clips into one animation for a ped, bake and export it (GTA SA Studio)")
+        tabs.register_tab("ANIMATE", "Animate", "Animate", os.path.join(ICON_DIR, "tab_animate.png"), draw_animate,
+                          order=50, icon_active=os.path.join(ICON_DIR, "tab_animate_on.png"),
+                          description="Combine IFP clips into one animation for a ped, bake and export it (GTA SA Studio)")
     if "vehicle" in areas:
-        ui_vehicle.add_sections(api)
-    edit.add_sections(api, areas)
+        ui_vehicle.add_sections()
+    edit.add_sections(areas)
 
 
-def remove_tabs(api):
+def hide_tabs():
     for t in TAB_IDS:
-        api.unregister_tab(t)
+        tabs.unregister_tab(t)
     from . import edit, ui_vehicle
-    ui_vehicle.remove_sections(api)
-    edit.remove_sections(api)
+    ui_vehicle.remove_sections()
+    edit.remove_sections()
 
 
 classes = ()

@@ -6,10 +6,10 @@
 #     -> light["gta_2dfx"], the same fields rwbuild writes
 # Without DragonFF registered, Blender keeps those property groups as plain stored data (4.x: the ID's
 # own custom properties; 5.x: its system properties), which is what is read here. Enum values are
-# stored as the item's position. Runs from a load_post handler (once per file load; objects already
-# tagged are skipped, so it's quick).
+# stored as the item's position. Nothing runs by itself: the "Update Older File" button in the add-on's
+# preferences (gtatk.update_old_file) does it for the open file, together with Studio's old lighting
+# settings. Objects already tagged are skipped, so pressing it twice is harmless.
 import bpy
-from bpy.app.handlers import persistent
 
 DFF_TYPES = {1: "COL", 2: "SHA"}          # DragonFF DFFObjectProps.type: OBJ, COL, SHA, 2DFX, CULL, NON
 
@@ -99,24 +99,44 @@ def migrate_file():
         if fx is not None:
             d["gta_2dfx"] = fx
             n_light += 1
-    if n_col or n_light:
-        print("[GTA SA Toolkit] older file: tagged %d collision objects and %d 2DFX lights" % (n_col, n_light))
     return n_col, n_light
 
 
-@persistent
-def _on_load(_dummy=None):
-    try:
-        migrate_file()
-    except Exception as e:                 # noqa - never break opening a file
-        print("[GTA SA Toolkit] migrating older file data failed: %s" % e)
+def update_file():
+    """Everything an older file needs: DragonFF-era tags + the lighting settings of core 1.x files
+    (Scene.gta_studio). Returns (collision objects, 2DFX lights, scenes) updated."""
+    n_col, n_light = migrate_file()
+    n_sc = 0
+    from .studio import lighting
+    for sc in bpy.data.scenes:
+        if getattr(sc, "gta_studio", None) is not None:
+            if lighting.migrate_old_settings(sc):
+                n_sc += 1
+            lighting.refresh_counts(sc)
+    return n_col, n_light, n_sc
+
+
+class GTATK_OT_update_old_file(bpy.types.Operator):
+    bl_idname = "gtatk.update_old_file"
+    bl_label = "Update Older File"
+    bl_description = ("Only for .blend files made with an older, pre-release version of this add-on: tag its "
+                      "collision objects and 2DFX lights the way this version does and bring over its old "
+                      "lighting settings. New files don't need it")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        n_col, n_light, n_sc = update_file()
+        if not (n_col or n_light or n_sc):
+            self.report({'INFO'}, "Nothing to update: this file is already up to date")
+        else:
+            self.report({'INFO'}, "Updated %d collision objects, %d lights and %d scene settings"
+                        % (n_col, n_light, n_sc))
+        return {'FINISHED'}
 
 
 def register():
-    if _on_load not in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.append(_on_load)
+    bpy.utils.register_class(GTATK_OT_update_old_file)
 
 
 def unregister():
-    if _on_load in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.remove(_on_load)
+    bpy.utils.unregister_class(GTATK_OT_update_old_file)

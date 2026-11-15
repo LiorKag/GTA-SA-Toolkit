@@ -1,7 +1,7 @@
 # GTA SA Studio - which timecyc file drives the sky (Scene tab > Time & Weather > Timecyc).
 # Entries: the game's data/timecyc.dat ("(modified)" when its numbers aren't the stock PC file's),
 # "Stock SA" (the stock numbers, kept in Studio's user data the first time a stock file is seen - the
-# add-on doesn't ship the game's file), files added with Add File..., and timecyc files core found in
+# add-on doesn't ship the game's file), files added with Add File..., and timecyc files found in
 # the Mod Folders. The choice is per scene (Scene.gta_studio.timecyc_choice); the chosen numbers are
 # also stored in the scene (timecyc_data), so the sky stays the same on a PC without that file.
 # No choice made yet (older files) = what Studio did before: Preferences' timecyc.dat, else the game's.
@@ -9,21 +9,21 @@ import os
 
 import bpy
 
-from . import corelink, timecyc
+from .. import mapimport, mods
+from . import switches, timecyc
 
 GAME, STOCK = "GAME", "STOCK"
 
 
 def _prefs():
     try:
-        return corelink.prefs()
+        return switches.prefs()
     except (KeyError, AttributeError):
         return None
 
 
 def _game_path():
-    api = corelink.api()
-    return api.game_file("data/timecyc.dat") if api is not None else None
+    return mapimport.game_file("data/timecyc.dat")
 
 
 # ----------------------------------------------------------------------------- stock numbers
@@ -67,11 +67,8 @@ def _hidden():
 
 
 def _found():
-    api = corelink.api()
-    if api is None or not hasattr(api, "mod_timecyc_files"):
-        return []
     hid = _hidden()
-    return [p for p in api.mod_timecyc_files() if os.path.normcase(p) not in hid]
+    return [p for p in mods.timecyc_files() if os.path.normcase(p) not in hid]
 
 
 def _short(path):

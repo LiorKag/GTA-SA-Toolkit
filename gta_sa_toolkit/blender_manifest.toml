@@ -1,14 +1,14 @@
 schema_version = "1.0.0"
 
 id = "gta_sa_toolkit"
-version = "1.0.0"
+version = "1.0.1"
 name = "GTA SA Toolkit"
 tagline = "Import GTA SA maps, peds, vehicles, weapons, toys and IFP anims"
 maintainer = "Benji"
 type = "add-on"
 website = "https://github.com/LiorKag/GTA-SA-Toolkit"
 
-tags = ["Import-Export", "Animation", "3D View"]
+tags = ["Import-Export"]
 
 blender_version_min = "4.4.0"
 

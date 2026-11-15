@@ -1,7 +1,7 @@
 # GTA SA Studio - traffic and ped paths (Edit tab): the game's road lanes and sidewalks as curves, and
 # vehicles / peds following a route between two picked points.
 #
-# The graph comes from core (api.path_graph: nodes0-63.dat). Here:
+# The graph comes from the add-on's paths.py (nodes0-63.dat). Here:
 #   Draw     roads and sidewalks of an area (the selected map import, or around the 3D cursor) become
 #            one curve object each, in "GTA Paths" > "GTA Roads" / "GTA Sidewalks". Road links are
 #            joined into chains between junctions (split where the lane count changes); every lane is
@@ -22,7 +22,10 @@ import math
 import bpy
 from mathutils import Matrix, Vector
 
-from . import corelink
+from .. import anim as core_anim
+from .. import mapimport, ui
+from .. import paths as core_paths
+from ..formats import nodes
 
 COLL_NAME = "GTA Paths"
 ROADS_NAME = "GTA Roads"
@@ -35,10 +38,6 @@ IMPORT_MARGIN = 30.0
 GAITS = {'WALK': "WALK_civi", 'RUN': "RUN_civi", 'SPRINT': "sprint_civi"}
 MAX_RAMP_SHARE = 0.25          # speeding up (and slowing down) takes at most this share of the route
 MAX_STEER = math.radians(35.0)
-
-
-def _api():
-    return corelink.api()
 
 
 # ----------------------------------------------------------------------------- collections
@@ -148,7 +147,7 @@ def offset_line(pts, offsets, lift=0.0):
 def lane_offset(i, lanes, other, median):
     """Metres to the right of the road's centre line for lane i (0 = nearest the centre) of the
     `lanes` going our way, with `other` lanes coming the other way."""
-    lw = _api().LANE_WIDTH
+    lw = nodes.LANE_WIDTH
     if other == 0:
         return (i - (lanes - 1) * 0.5) * lw
     return median * 0.5 + (i + 0.5) * lw
@@ -262,7 +261,7 @@ def area_filter(scene):
         r2 = st.path_radius ** 2
         cx, cy = c.x, c.y
         return (lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2 <= r2), "%d m around the 3D cursor" % st.path_radius
-    b = _api().import_bounds()
+    b = mapimport.import_bounds()
     if b is None:
         raise ValueError("No map imported yet: import a map, or use Around 3D Cursor")
     x0, y0 = b["min"][0] - IMPORT_MARGIN, b["min"][1] - IMPORT_MARGIN
@@ -336,7 +335,7 @@ def draw_paths(scene):
     """Draw the chosen area's roads / sidewalks (replacing earlier ones). Returns (lanes, sidewalks)."""
     st = scene.gta_studio
     inside, where = area_filter(scene)
-    g = _api().path_graph()
+    g = core_paths.current_graph()
     lanes = walks = 0
     clear_paths(routes=False)
     if st.path_roads:
@@ -572,11 +571,10 @@ def _rest(ob):
 def gait_cycle(arm, gait):
     """(anim, frames per cycle at fps, metres per cycle, forward (x, y) in armature space) of the
     ped.ifp animation for this gait."""
-    a = _api()
-    path = a.game_file("anim/ped.ifp")
+    path = mapimport.game_file("anim/ped.ifp")
     if path is None:
         raise ValueError("anim/ped.ifp not found in the game folder")
-    f = a.ifp_load(path)
+    f = ui.load_ifp(path)
     name = GAITS[gait]
     anim = f.find(name) or next((x for x in f.animations if x.name.lower() == name.lower()), None)
     if anim is None:
@@ -603,11 +601,10 @@ def gait_cycle(arm, gait):
 
 def _walk_strip(arm, anim, fps, frame0, n_frames, times):
     """NLA track 'GTA Path: <anim>' with the in-place cycle; its time is keyed from `times`."""
-    a = _api()
     ad = arm.animation_data or arm.animation_data_create()
     keep, keep_slot = ad.action, (ad.action_slot if ad.action is not None else None)
-    act, _missing = a.ifp_apply(arm, anim, start_frame=1.0, fps=fps, root_mode='INPLACE', new_action=True,
-                                action_name="GTA Path " + anim.name, clear_pose=False)
+    act, _missing = core_anim.apply_ifp(arm, anim, start_frame=1.0, fps=fps, root_mode='INPLACE',
+                                        new_action=True, action_name="GTA Path " + anim.name, clear_pose=False)
     act.use_fake_user = False
     act["gta_path"] = True
     ad.action = keep
@@ -649,7 +646,7 @@ def follow(scene, ob, start, end, speed_kmh=None, gait=None, frame=None):
         raise ValueError("Select a vehicle or a ped first")
     st = scene.gta_studio
     ped = kind == 'PED'
-    g = _api().path_graph()
+    g = core_paths.current_graph()
     a, b = nearest_node(g, start, ped), nearest_node(g, end, ped)
     keys = find_route(g, a, b, ped)
     if keys is None:
@@ -824,7 +821,7 @@ class RoutePicker:
         self.points = []
 
     def point_for_ray(self, depsgraph, origin, direction):
-        g = _api().path_graph()
+        g = core_paths.current_graph()
         ped = self.kind == 'PED'
         skip = set()
         if self.mover is not None:
@@ -851,7 +848,7 @@ class RoutePicker:
 
     def snapped(self):
         """The picked points moved onto the nearest path node (where the route will start / end)."""
-        g = _api().path_graph()
+        g = core_paths.current_graph()
         ped = self.kind == 'PED'
         out = []
         for p in self.points:
@@ -903,13 +900,7 @@ def _markers(points):
 
 
 # ----------------------------------------------------------------------------- operators
-class _NeedsCore:
-    @classmethod
-    def poll(cls, context):
-        return corelink.api() is not None
-
-
-class GTASTUDIO_OT_draw_paths(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_draw_paths(bpy.types.Operator):
     bl_idname = "gtastudio.draw_paths"
     bl_label = "Draw Paths"
     bl_description = "Draw the game's road lanes and sidewalks in the chosen area as curves"
@@ -932,7 +923,7 @@ class GTASTUDIO_OT_draw_paths(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_clear_paths(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_clear_paths(bpy.types.Operator):
     bl_idname = "gtastudio.clear_paths"
     bl_label = "Clear"
     bl_description = "Remove the drawn roads and sidewalks (routes stay)"
@@ -944,7 +935,7 @@ class GTASTUDIO_OT_clear_paths(_NeedsCore, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class GTASTUDIO_OT_follow_path(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_follow_path(bpy.types.Operator):
     bl_idname = "gtastudio.follow_path"
     bl_label = "Pick Route"
     bl_description = ("Click the start, then the end, in the 3D view: the selected vehicle or ped follows "
@@ -977,7 +968,7 @@ class GTASTUDIO_OT_follow_path(_NeedsCore, bpy.types.Operator):
             self.report({'ERROR'}, "Needs a 3D view")
             return {'CANCELLED'}
         try:
-            _api().path_graph()                       # read now, not on the first click
+            core_paths.current_graph()                       # read now, not on the first click
         except (ValueError, RuntimeError) as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -1044,7 +1035,7 @@ class GTASTUDIO_OT_follow_path(_NeedsCore, bpy.types.Operator):
         return self.execute(context)
 
 
-class GTASTUDIO_OT_stop_follow(_NeedsCore, bpy.types.Operator):
+class GTASTUDIO_OT_stop_follow(bpy.types.Operator):
     bl_idname = "gtastudio.stop_follow"
     bl_label = "Stop Following"
     bl_description = "Remove the route animation from the selected vehicle or ped and put it back where it was"

@@ -65,7 +65,7 @@ def list_weapons(game):
 
 def import_weapon(context, game, model_id, location=None):
     od = game.objects[int(model_id)]
-    coll = mapimport.import_model_from_img(context, game, od.model, True, True)
+    coll = mapimport.import_model_from_img(context, game, od.model, True, mapimport.pack_setting())
     _hide_flashes(coll)
     for ob in list(coll.objects):
         if ob.parent is None:

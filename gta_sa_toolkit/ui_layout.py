@@ -3,7 +3,7 @@
 #   Peds       : Ped import, IFP animation, IFP export, SA-MP toys, ped tools (tab id CHARS)
 #   Objects    : Vehicles, weapons, objects (tab id ITEMS, its old name)
 #   Library    : Search everywhere, favorites, recent imports
-# GTA SA Studio adds its own tabs (Scene: lighting, time of day) through api.register_tab.
+# GTA SA Studio (studio/) adds its own tabs (Animate, Scene) with tabs.register_tab.
 import os
 from types import SimpleNamespace
 
@@ -303,8 +303,6 @@ class GTATK_PT_main(bpy.types.Panel):
         p = context.scene.gta_tk
         x = context.scene.gta_tk_x
         l = self.layout
-        from . import studiolink
-        studiolink.draw_old_message(l)            # an old separate GTA SA Studio is still installed
         scanned = bool(p.sections or x.vehicles)
         col = l.column(align=True)
         col.prop(p, "game_root", text="")
