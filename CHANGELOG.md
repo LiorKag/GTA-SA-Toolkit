@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- The Library's favorites and recent imports are loaded from library.json during register(), no timer.
+
 ## 1.0.1
 
 Changes asked for in the extensions.blender.org review:

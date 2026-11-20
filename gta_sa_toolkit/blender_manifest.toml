@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "gta_sa_toolkit"
-version = "1.0.1"
+version = "1.0.2"
 name = "GTA SA Toolkit"
 tagline = "Import GTA SA maps, peds, vehicles, weapons, toys and IFP anims"
 maintainer = "Benji"

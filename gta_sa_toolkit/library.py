@@ -1018,7 +1018,8 @@ def fill_favorite_settings():
     return n
 
 
-def _restore_later():
+def _restore():
+    """At register(): bring back library.json if it is newer than the preferences."""
     try:
         restore_backup()
         fill_favorite_settings()
@@ -1030,7 +1031,6 @@ def _restore_later():
         cache.index()                 # read index.json now, not in the first draw
     except Exception as e:            # noqa
         print("[GTA SA Toolkit] cache size:", e)
-    return None                       # one shot
 
 
 def register():
@@ -1038,15 +1038,12 @@ def register():
         bpy.utils.register_class(c)
     bpy.types.Scene.gta_tk_lib = PointerProperty(type=GTATK_LibState)
     _invalidate()
-    if prefs() is not None:
-        _restore_later()
-    else:                             # first enable: the preferences entry appears after register()
-        bpy.app.timers.register(_restore_later, first_interval=0.1)
+    # shortcut: on the very first enable the preferences entry doesn't exist yet, so library.json
+    # (e.g. after a reinstall) comes back at the next start of Blender, not right away.
+    _restore()
 
 
 def unregister():
-    if bpy.app.timers.is_registered(_restore_later):
-        bpy.app.timers.unregister(_restore_later)
     del bpy.types.Scene.gta_tk_lib
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
